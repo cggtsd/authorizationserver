@@ -1,4 +1,26 @@
 logging:
   level:
     org.springframework.security: trace
+    org.hibernate.SQL: DEBUG
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/oauth2db
+    username: postgres
+    password: root
+
+  jpa:
+    hibernate:
+     ddl-auto: update
+
+
+
+     
+
+
+
+
+
+    
+
 

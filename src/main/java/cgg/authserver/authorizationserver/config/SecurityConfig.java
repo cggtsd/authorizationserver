@@ -17,17 +17,24 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 
+import cgg.authserver.authorizationserver.services.CustomUserDetailsService;
+import lombok.AllArgsConstructor;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.NoOpPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.oidc.OidcScopes;
@@ -51,8 +58,10 @@ import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 
 @Configuration
 @EnableWebSecurity
+@AllArgsConstructor
 public class SecurityConfig {
 
+	private CustomUserDetailsService customUserDetailsService;
 	@Bean
 	@Order(1)
     SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http)
@@ -93,8 +102,11 @@ public class SecurityConfig {
 	SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http)
 			throws Exception {
 		http
-			.authorizeHttpRequests((authorize) -> authorize
-				.anyRequest().authenticated()
+		.csrf(csrf->csrf.disable())
+			.authorizeHttpRequests((authorize) ->
+			 authorize
+			 .requestMatchers("/user","/client").permitAll()
+			.anyRequest().authenticated()
 			)
 			// Form login handles the redirect to the login page from the
 			// authorization server filter chain
@@ -103,38 +115,44 @@ public class SecurityConfig {
 		return http.build();
 	}
 
-	@Bean
-	UserDetailsService userDetailsService() {
-		UserDetails userDetails = User.withDefaultPasswordEncoder()
-				.username("user")
-				.password("password")
-				.roles("USER")
-				.build();
+	// @Bean
+	// UserDetailsService userDetailsService() {
+	// 	UserDetails userDetails = User.withDefaultPasswordEncoder()
+	// 			.username("user")
+	// 			.password("password")
+	// 			.roles("USER")
+	// 			.build();
 
-		return new InMemoryUserDetailsManager(userDetails);
+	// 	return new InMemoryUserDetailsManager(userDetails);
+	// }
+
+	@Bean
+	PasswordEncoder getPasswordEncoder(){
+        return new BCryptPasswordEncoder();
+		// return NoOpPasswordEncoder.getInstance();
 	}
 
-	@Bean
-	RegisteredClientRepository registeredClientRepository() {
-		RegisteredClient oidcClient = RegisteredClient.withId(UUID.randomUUID().toString())
-				.clientId("oidc-client")
-				.clientSecret("{noop}secret")
-				.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-				.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-				.authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-				.redirectUri("http://127.0.0.1:3000/authorized")
-				.postLogoutRedirectUri("http://127.0.0.1:8080/")
-				.scope(OidcScopes.OPENID)
-				.scope(OidcScopes.PROFILE)
-                .tokenSettings(TokenSettings.builder()
-                .accessTokenFormat(OAuth2TokenFormat.REFERENCE)
-                .accessTokenTimeToLive(Duration.ofSeconds(900))
-                .build())
-				.clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
-				.build();
+	// @Bean
+	// RegisteredClientRepository registeredClientRepository() {
+	// 	RegisteredClient oidcClient = RegisteredClient.withId(UUID.randomUUID().toString())
+	// 			.clientId("oidc-client")
+	// 			.clientSecret("{noop}secret")
+	// 			.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+	// 			.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+	// 			.authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+	// 			.redirectUri("http://127.0.0.1:3000/authorized")
+	// 			.postLogoutRedirectUri("http://127.0.0.1:8080/")
+	// 			.scope(OidcScopes.OPENID)
+	// 			.scope(OidcScopes.PROFILE)
+    //             .tokenSettings(TokenSettings.builder()
+    //             // .accessTokenFormat(OAuth2TokenFormat.REFERENCE)
+    //             .accessTokenTimeToLive(Duration.ofSeconds(900))
+    //             .build())
+	// 			.clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
+	// 			.build();
 
-		return new InMemoryRegisteredClientRepository(oidcClient);
-	}
+	// 	return new InMemoryRegisteredClientRepository(oidcClient);
+	// }
 
 	@Bean
 	JWKSource<SecurityContext> jwkSource() {
@@ -180,5 +198,13 @@ public class SecurityConfig {
         };
 
     }
+
+	@Bean
+	AuthenticationProvider daoAuthenticationProvider(){
+		DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+		provider.setUserDetailsService(customUserDetailsService);
+		provider.setPasswordEncoder(getPasswordEncoder());
+	    return provider;
+	}
 
 }
